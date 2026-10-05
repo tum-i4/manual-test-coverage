@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "manual-test-coverage"
+version = "0.1.0"
+description = "Native Frida-based manual code coverage recording for manual test runs"
+authors = ["Roland Würsching"]
+packages = [
+    { include = "manual_test_coverage", from = "src"},
+]
+include = [
+    "src/manual_test_coverage/agents/*.js",
+    "src/manual_test_coverage/*.ui",
+]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.15"
+frida = "*"
+frida-tools = "*"
+PyQt5 = "*"
+PyQt5-Qt5 = [
+    { version = "5.15.2", markers = "sys_platform == 'win32'" },
+    { version = ">=5.15.2,<5.16.0", markers = "sys_platform != 'win32'" },
+]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
+pylint = "^4.0.5"
+pyinstaller = "^6.20.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

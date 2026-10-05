@@ -1,0 +1,106 @@
+let processId;
+let moduleFunctionMap = new Map();
+let moduleBaseAddressMap = new Map();
+let modulesToInstrument = new Map();
+let calledFunctionOffsets = new Map();
+
+const instrumentProcessCreation = () => {
+	const kernel32 = Process.getModuleByName("kernel32.dll")
+    const createProcessFunc = kernel32.getExportByName("CreateProcessW");
+	Interceptor.attach(createProcessFunc, {
+		onEnter(args) {
+			this.cmdLine = args[1].readUtf16String();
+			this.processInfo = args[9];
+		},
+		onLeave(retval) {
+			const childPid = this.processInfo.add(Process.pointerSize * 2).readUInt();
+			send({childProcess: [childPid, this.cmdLine]});
+		}
+	});
+};
+
+const instrumentProcessExit = () => {
+	const ucrtbase = Process.getModuleByName("ucrtbase.dll")
+    const exitProcessFunc = ucrtbase.getExportByName("exit");
+	Interceptor.attach(exitProcessFunc, {
+		onEnter(args) {
+			dumpCppCoverage();
+		},
+	});
+};
+
+const instrumentModules = () => {
+	let numFunctions = 0;
+	console.log("Instrumenting " + modulesToInstrument.values().length + " modules...");
+    for (const module of modulesToInstrument.values()) {
+		const moduleName = module.name.toLowerCase();
+		moduleBaseAddressMap.set(moduleName, module.base);
+        for (const funcOffset of moduleFunctionMap[moduleName]) {
+			numFunctions += 1;
+            attach_interceptor(moduleName, funcOffset);
+        }
+    }
+	console.log("Done - " + numFunctions + " functions instrumented.");
+};
+
+const attach_interceptor = (moduleName, funcOffset) => {
+	const funcAddr = moduleBaseAddressMap.get(moduleName).add(funcOffset);
+
+	try {
+		const interceptor = Interceptor.attach(funcAddr, function (args) {
+			// Register called function
+			// TODO optimize: initialize sets outside
+			const funcOffsets = calledFunctionOffsets.get(moduleName);
+			if (funcOffsets) funcOffsets.add(funcOffset);
+			else calledFunctionOffsets.set(moduleName, new Set([funcOffset]));
+		});
+	}
+	catch (err) {
+		send({error: `Agent: Could not instrument function ${moduleName}:${funcOffset}`});
+	}
+};
+
+const instrumentCpp = () => {
+	instrumentProcessCreation();
+	instrumentProcessExit();
+    instrumentModules();
+};
+
+const setupCpp = (moduleFunctionMap_, pid) => {
+	processId = pid;
+    moduleFunctionMap = moduleFunctionMap_;
+	const modules = Object.keys(moduleFunctionMap);
+    modulesToInstrument = new ModuleMap(module => modules.includes(module.name.toLowerCase()));
+
+	instrumentCpp();
+};
+
+const restoreCpp = () => {
+	Interceptor.detachAll();
+    instrumentCpp();
+};
+
+/**
+ * Clear currently recorded C++ function traces.
+ */
+const clearCppCoverage = () => {
+	calledFunctionOffsets.clear();
+};
+
+/**
+ * Return the collected C++ function traces.
+ */
+const dumpCppCoverage = () => {
+	// Data must be sent as JSON serializable object (sets -> arrays)
+	const calledFunctionOffsetsObject = Object.fromEntries(
+		[...calledFunctionOffsets].map(([key, value]) => [key, [...value]])
+	);
+	send({coverage: calledFunctionOffsetsObject})
+};
+
+rpc.exports = {
+    setupCpp,
+	restoreCpp,
+	clearCppCoverage,
+	dumpCppCoverage
+};
