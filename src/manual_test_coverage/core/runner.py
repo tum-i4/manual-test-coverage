@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import logging
 import sys
 
-from PyQt5.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 from manual_test_coverage.core.coverage_lifecycle import CoverageLifecycleManager
 from manual_test_coverage.core.coverage_store import CoverageStore
@@ -42,7 +42,7 @@ class RunnerState:
 class FridaRunner(QObject):
     """Attach Frida to native processes and collect coverage traces."""
 
-    state_changed = pyqtSignal(dict)
+    state_changed = Signal(dict)
 
     def __init__(self, config: RunnerConfig, pid):
         super().__init__()

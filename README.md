@@ -1,7 +1,12 @@
 # Manual Test Coverage
 
-Record native function coverage during manual tests using Frida and a PyQt5 GUI,
+Record native function coverage during manual tests using Frida and a PySide6 GUI,
 then export Cobertura XML reports.
+
+The project is licensed under [Apache 2.0](LICENSE). The GUI uses
+`PySide6-Essentials` under its LGPLv3 option; third-party dependencies retain
+their own licenses. Packaged distributions must meet
+[Qt's LGPL obligations](https://www.qt.io/development/open-source-lgpl-obligations).
 
 ## Usage
 

@@ -6,9 +6,9 @@ import re
 import logging
 from pathlib import Path
 from datetime import datetime
-from PyQt5 import uic
-from PyQt5.QtWidgets import QDialog, QMainWindow, QApplication, QMessageBox
-from PyQt5.QtCore import Qt
+from PySide6.QtWidgets import QDialog, QMainWindow, QApplication, QMessageBox
+from PySide6.QtCore import QFile, QIODevice, Qt, Slot
+from PySide6.QtUiTools import QUiLoader
 from manual_test_coverage.event_handler import TestEventHandler
 
 logging.basicConfig(
@@ -21,18 +21,44 @@ VALID_TEST_NAME_REGEX = r"^[\w\-.][\w\-. ]*$"
 
 mainwindow_file = Path(os.path.abspath(os.path.dirname(__file__))) / "mainwindow.ui"
 startdialog_file = Path(os.path.abspath(os.path.dirname(__file__))) / "dialog_start.ui"
-Ui_MainWindow, QtBaseClass = uic.loadUiType(mainwindow_file)
 
 TESTCASE_LABEL_NONE = "No test case active."
 TARGET_LABEL_RUNNING = "Target running."
 TARGET_LABEL_STOPPED = "Target stopped."
 
 
+class _UiLoader(QUiLoader):
+    """Populate an existing window from a Designer file."""
+
+    def __init__(self, window):
+        super().__init__()
+        self.window = window
+
+    def createWidget(self, class_name, parent=None, name=""):
+        if parent is None:
+            return self.window
+        widget = super().createWidget(class_name, parent, name)
+        setattr(self.window, name, widget)
+        return widget
+
+
+def _load_ui(path, window):
+    ui_file = QFile(str(path))
+    if not ui_file.open(QIODevice.OpenModeFlag.ReadOnly):
+        raise RuntimeError(f"Cannot open UI file {path}: {ui_file.errorString()}")
+    try:
+        loader = _UiLoader(window)
+        if loader.load(ui_file) is None:
+            raise RuntimeError(f"Cannot load UI file {path}: {loader.errorString()}")
+    finally:
+        ui_file.close()
+
+
 class StartDialog(QDialog):
     """Dialog for setting a test case name/ID."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        uic.loadUi(startdialog_file, self)
+        _load_ui(startdialog_file, self)
         self.setMaximumSize(self.frameGeometry().width(),self.frameGeometry().height())
         self.errorLabel.setVisible(False)
         self.buttonBox.accepted.connect(self.validate_accept)
@@ -46,16 +72,15 @@ class StartDialog(QDialog):
             self.errorLabel.setVisible(True)
 
 
-class MainWindow(QMainWindow, Ui_MainWindow):
+class MainWindow(QMainWindow):
     """Main GUI window"""
     def __init__(self, runner):
-        QMainWindow.__init__(self, None, Qt.WindowStaysOnTopHint)
-        Ui_MainWindow.__init__(self)
-        self.setupUi(self)
+        super().__init__(None, Qt.WindowType.WindowStaysOnTopHint)
+        _load_ui(mainwindow_file, self)
         self.handler = TestEventHandler(runner)
         # Move window to top left corner
         self.setMaximumSize(self.frameGeometry().width(),self.frameGeometry().height())
-        top_left_point = QApplication.desktop().availableGeometry().topLeft()
+        top_left_point = self.screen().availableGeometry().topLeft()
         self.move(top_left_point)
 
         runner.state_changed.connect(self.update_state)
@@ -72,6 +97,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         timestamp = current_time.strftime("%H:%M:%S")
         self.logTextEdit.append(f"[{timestamp}] {message}")
 
+    @Slot(dict)
     def update_state(self, state: dict):
         """Update GUI from runner's state."""
         # Test case name

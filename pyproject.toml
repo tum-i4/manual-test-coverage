@@ -3,6 +3,7 @@ name = "manual-test-coverage"
 version = "0.1.0"
 description = "Native Frida-based manual code coverage recording for manual test runs"
 authors = ["Roland Würsching"]
+license = "Apache-2.0"
 packages = [
     { include = "manual_test_coverage", from = "src"},
 ]
@@ -15,11 +16,8 @@ include = [
 python = ">=3.10,<3.15"
 frida = "*"
 frida-tools = "*"
-PyQt5 = "*"
-PyQt5-Qt5 = [
-    { version = "5.15.2", markers = "sys_platform == 'win32'" },
-    { version = ">=5.15.2,<5.16.0", markers = "sys_platform != 'win32'" },
-]
+# Qt 6.10 supports macOS versions before 14.4.
+PySide6-Essentials = "~6.10.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"
